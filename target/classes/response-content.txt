@@ -1,0 +1,4 @@
+This is the intercepted response content from file!
+
+The original response has been replaced with this content from the file.
+You can modify this file to change what gets returned by the interceptor.
