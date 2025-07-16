@@ -31,9 +31,10 @@ public class ResponseInterceptor implements Filter {
         // Read content from file
         String fileContent = readFileContent();
         
-        // Set the file content as response body
+        // Replace the response body with file content
         httpResponse.setContentType("text/plain");
         httpResponse.setCharacterEncoding("UTF-8");
+        httpResponse.setContentLength(fileContent.length());
         httpResponse.getWriter().write(fileContent);
         httpResponse.getWriter().flush();
     }
@@ -55,37 +56,43 @@ public class ResponseInterceptor implements Filter {
 
     // Custom response wrapper to capture response content
     private static class ResponseWrapper extends HttpServletResponseWrapper {
-        private StringWriter stringWriter;
+        private ByteArrayOutputStream outputStream;
         private PrintWriter writer;
+        private ServletOutputStream servletOutputStream;
 
         public ResponseWrapper(HttpServletResponse response) {
             super(response);
-            stringWriter = new StringWriter();
-            writer = new PrintWriter(stringWriter);
+            outputStream = new ByteArrayOutputStream();
         }
 
         @Override
         public PrintWriter getWriter() throws IOException {
+            if (writer == null) {
+                writer = new PrintWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
+            }
             return writer;
         }
 
         @Override
         public ServletOutputStream getOutputStream() throws IOException {
-            return new ServletOutputStream() {
-                @Override
-                public void write(int b) throws IOException {
-                    writer.write(b);
-                }
+            if (servletOutputStream == null) {
+                servletOutputStream = new ServletOutputStream() {
+                    @Override
+                    public void write(int b) throws IOException {
+                        outputStream.write(b);
+                    }
 
-                @Override
-                public boolean isReady() {
-                    return true;
-                }
+                    @Override
+                    public boolean isReady() {
+                        return true;
+                    }
 
-                @Override
-                public void setWriteListener(WriteListener writeListener) {
-                }
-            };
+                    @Override
+                    public void setWriteListener(WriteListener writeListener) {
+                    }
+                };
+            }
+            return servletOutputStream;
         }
 
         @Override
@@ -93,9 +100,16 @@ public class ResponseInterceptor implements Filter {
             // Don't set content length as we're replacing the content
         }
 
-        public String getContent() {
-            writer.flush();
-            return stringWriter.toString();
+        @Override
+        public void setContentLengthLong(long len) {
+            // Don't set content length as we're replacing the content
+        }
+
+        public byte[] getContent() {
+            if (writer != null) {
+                writer.flush();
+            }
+            return outputStream.toByteArray();
         }
     }
 }
